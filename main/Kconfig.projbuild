@@ -25,13 +25,6 @@ menu "Example Configuration"
             bool "BOTH"
     endchoice
 
-    config ESP_WIFI_PW_ID
-        string "PASSWORD IDENTIFIER"
-        depends on  ESP_WPA3_SAE_PWE_HASH_TO_ELEMENT|| ESP_WPA3_SAE_PWE_BOTH
-        default ""
-        help
-            password identifier for SAE H2E
-
     config ESP_MAXIMUM_RETRY
         int "Maximum retry"
         default 5
