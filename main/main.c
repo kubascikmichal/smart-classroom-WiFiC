@@ -18,8 +18,13 @@
 #define EXAMPLE_ESP_WIFI_SSID CONFIG_ESP_WIFI_SSID
 #define EXAMPLE_ESP_WIFI_PASS CONFIG_ESP_WIFI_PASSWORD
 #define EXAMPLE_ESP_MAXIMUM_RETRY CONFIG_ESP_MAXIMUM_RETRY
+
+#define HOST_IP_ADDR CONFIG_EXAMPLE_IPV4_ADDR
+#define PORT CONFIG_EXAMPLE_PORT
+
 #define TAG "WiFi station"
-#define PAYLOAD "Message from ESP32"
+#define TAG_UDP "UDP"
+#define PAYLOAD "Bonjour Romain"
 
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t s_wifi_event_group;
@@ -140,79 +145,93 @@ void generate_sensor_data(float *temperature, float *humidity, float *lightness,
     *gyro_z = generate_random_float(-180.0, 180.0);
 }
 
-esp_err_t client_event_post_handler(esp_http_client_event_t *evt)
+static void udp_client_task(void *pvParameters)
 {
-    switch (evt->event_id)
+    char rx_buffer[128];
+    char host_ip[] = HOST_IP_ADDR;
+    int addr_family = 0;
+    int ip_protocol = 0;
+
+    while (1)
     {
-    case HTTP_EVENT_ERROR:
-        ESP_LOGI(TAG, "HTTP_EVENT_ERROR");
-        break;
-    case HTTP_EVENT_ON_CONNECTED:
-        ESP_LOGI(TAG, "HTTP_EVENT_ON_CONNECTED");
-        break;
-    case HTTP_EVENT_HEADER_SENT:
-        ESP_LOGI(TAG, "HTTP_EVENT_HEADER_SENT");
-        break;
-    case HTTP_EVENT_ON_HEADER:
-        ESP_LOGI(TAG, "HTTP_EVENT_ON_HEADER, key=%s, value=%s", evt->header_key, evt->header_value);
-        break;
-    case HTTP_EVENT_ON_DATA:
-        ESP_LOGI(TAG, "HTTP_EVENT_ON_DATA, len=%d", evt->data_len);
-        break;
-    case HTTP_EVENT_ON_FINISH:
-        ESP_LOGI(TAG, "HTTP_EVENT_ON_FINISH");
-        break;
-    case HTTP_EVENT_DISCONNECTED:
-        ESP_LOGI(TAG, "HTTP_EVENT_DISCONNECTED");
-        break;
-    case HTTP_EVENT_REDIRECT:
-        ESP_LOGI(TAG, "HTTP_EVENT_REDIRECT");
-        break;
+
+#if defined(CONFIG_EXAMPLE_IPV4_ADDR)
+        struct sockaddr_in dest_addr;
+        dest_addr.sin_addr.s_addr = inet_addr(HOST_IP_ADDR);
+        dest_addr.sin_family = AF_INET;
+        dest_addr.sin_port = htons(PORT);
+        addr_family = AF_INET;
+        ip_protocol = IPPROTO_IP;
+#endif
+
+        int sock = socket(addr_family, SOCK_DGRAM, ip_protocol);
+        if (sock < 0)
+        {
+            ESP_LOGE(TAG_UDP, "Unable to create socket: errno %d", errno);
+            vTaskDelete(NULL);
+            return;
+        }
+
+        // Set timeout
+        struct timeval timeout;
+        timeout.tv_sec = 10;
+        timeout.tv_usec = 0;
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+        ESP_LOGI(TAG_UDP, "Socket created, sending to %s:%d", HOST_IP_ADDR, PORT);
+
+        while (1)
+        {
+            float temperature, humidity, lightness, aqi, gyro_x, gyro_y, gyro_z;
+            generate_sensor_data(&temperature, &humidity, &lightness, &aqi, &gyro_x, &gyro_y, &gyro_z);
+
+            char payload[256];
+            snprintf(payload, sizeof(payload), "Temperature: %.2f, Humidity: %.2f, Lightness: %.2f, AQI: %.2f, GyroX: %.2f, GyroY: %.2f, GyroZ: %.2f",
+                     temperature, humidity, lightness, aqi, gyro_x, gyro_y, gyro_z);
+
+            int err = sendto(sock, payload, strlen(payload), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+            if (err < 0)
+            {
+                ESP_LOGE(TAG_UDP, "Error occurred during sending: errno %d", errno);
+                break;
+            }
+            ESP_LOGI(TAG_UDP, "Message sent: %s", payload);
+
+            struct sockaddr_storage source_addr;
+            socklen_t socklen = sizeof(source_addr);
+            int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&source_addr, &socklen);
+
+            // Error occurred during receiving
+            if (len < 0)
+            {
+                ESP_LOGE(TAG_UDP, "recvfrom failed: errno %d", errno);
+                break;
+            }
+            // Data received
+            else
+            {
+                rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string
+                ESP_LOGI(TAG_UDP, "Received %d bytes from %s:", len, host_ip);
+                ESP_LOGI(TAG_UDP, "%s", rx_buffer);
+                if (strncmp(rx_buffer, "OK: ", 4) == 0)
+                {
+                    ESP_LOGI(TAG_UDP, "Received expected message, reconnecting");
+                    break;
+                }
+            }
+
+            vTaskDelay(5000 / portTICK_PERIOD_MS); // Wait 5 seconds before sending the next set of data
+        }
+
+        if (sock != -1)
+        {
+            ESP_LOGE(TAG_UDP, "Shutting down socket and restarting...");
+            shutdown(sock, 0);
+            close(sock);
+        }
     }
-    return ESP_OK;
-}
 
-void post_sensor_data(float temperature, float humidity, float lightness, float aqi, float gyro_x, float gyro_y, float gyro_z)
-{
-    esp_http_client_config_t config_post = {
-        .url = "http://192.168.4.1/uri",
-        .method = HTTP_METHOD_POST,
-        .cert_pem = NULL,
-        .event_handler = client_event_post_handler};
-
-    esp_http_client_handle_t client = esp_http_client_init(&config_post);
-
-    // Create JSON object
-    cJSON *root = cJSON_CreateObject();
-    cJSON_AddNumberToObject(root, "temperature", temperature);
-    cJSON_AddNumberToObject(root, "humidity", humidity);
-    cJSON_AddNumberToObject(root, "lightness", lightness);
-    cJSON_AddNumberToObject(root, "aqi", aqi);
-    cJSON_AddNumberToObject(root, "gyro_x", gyro_x);
-    cJSON_AddNumberToObject(root, "gyro_y", gyro_y);
-    cJSON_AddNumberToObject(root, "gyro_z", gyro_z);
-
-    // Convert JSON object to string
-    char *post_data = cJSON_Print(root);
-
-    esp_http_client_set_post_field(client, post_data, strlen(post_data));
-    esp_http_client_set_header(client, "Content-Type", "application/json");
-
-    esp_err_t err = esp_http_client_perform(client);
-    if (err == ESP_OK)
-    {
-        ESP_LOGI(TAG, "HTTP POST Status = %ld, content_length = %ld",
-                 (long)esp_http_client_get_status_code(client),
-                 (long)esp_http_client_get_content_length(client));
-    }
-    else
-    {
-        ESP_LOGE(TAG, "HTTP POST request failed: %s", esp_err_to_name(err));
-    }
-
-    esp_http_client_cleanup(client);
-    cJSON_Delete(root);
-    free(post_data);
+    vTaskDelete(NULL);
 }
 
 void app_main(void)
@@ -225,17 +244,10 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
+    ESP_LOGI(TAG_UDP, "ESP_WIFI_MODE_STA");
     wifi_init_sta();
 
     srand(time(NULL));
 
-    while (1)
-    {
-        float temperature, humidity, lightness, aqi, gyro_x, gyro_y, gyro_z;
-        generate_sensor_data(&temperature, &humidity, &lightness, &aqi, &gyro_x, &gyro_y, &gyro_z);
-        post_sensor_data(temperature, humidity, lightness, aqi, gyro_x, gyro_y, gyro_z);
-
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    }
+    xTaskCreate(udp_client_task, "udp_client", 4096, NULL, 5, NULL);
 }

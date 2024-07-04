@@ -1,16 +1,29 @@
-menu "Example Configuration"
+menu "Project Configuration"
 
     config ESP_WIFI_SSID
         string "WiFi SSID"
-        default "myssid"
+        default "JOEJOEJOE"
         help
-            SSID (network name) for the example to connect to.
+            SSID for the example to connect to.
 
     config ESP_WIFI_PASSWORD
         string "WiFi Password"
-        default "mypassword"
+        default "spidermonkey"
         help
-            WiFi password (WPA or WPA2) for the example to use.
+            WiFi password for the example to use.
+
+    config EXAMPLE_IPV4_ADDR
+        string "IPV4 Address"
+        default "192.168.4.1"
+        help
+            IPV4 address to which the client example will send data.
+
+    config EXAMPLE_PORT
+        int "Port"
+        range 0 65535
+        default 3333
+        help
+            The remote port to which the client example will send data.
 
     choice ESP_WIFI_SAE_MODE
         prompt "WPA3 SAE mode selection"
