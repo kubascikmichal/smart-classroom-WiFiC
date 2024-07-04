@@ -1,28 +1,58 @@
 # ESP32-S3-DeviceKitC-1 Demo
 
-## Wi-Fi / UDP requests example
+## Overview  
 
-This small program demonstrates how to use Wi-Fi to connect to an access point, generate random sensor values, and send them to a server using the UDP protocol.
+This project demonstrates how to use the ESP32-S3-DeviceKitC-1 to connect to Wi-Fi, generate random sensor values, and send them to a server using HTTP and UDP protocols. The project is divided into two branches to showcase different communication methods:
 
-## Usage 
+- `wifi_http_requests`: This branch contains code for sending sensor data to a server using HTTP POST requests.  
 
-- Import the project  
+- `wifi_udp_requests`: This branch contains code for sending sensor data to a server using UDP.
 
-- Configure Wi-Fi SSID and password using `idf.py menuconfig` you also need to configure server information (IP address and PORT)  
-![alt text](assets/image2.png)
+- `Main Branch`: Contains the project overview and documentation. 
 
-- Build the project and flash it to the board
+## Getting Started
 
-## Output example
+```
+# Clone the repo
+git clone https://github.com/kubascikmichal/smart-classroom-WiFiC
 
-![alt text](assets/image.png)  
+# Navigate to the following repository 
+cd smart-classroom-WiFiC
 
-## Additional Information
+# Checkout to the
+git checkout <branch_name>
+Replace <repository_url> with the URL of your repository and <branch_name> with either http-requests or udp-requests.
+```
 
-- Ensure you have the necessary dependencies installed, such as the ESP-IDF development environment  
+Project Structure
+http-requests branch: Contains the implementation for sending sensor data via HTTP POST requests.
+udp-requests branch: Contains the implementation for sending sensor data via UDP.
+Requirements
+ESP32-S3-DeviceKitC-1
+ESP-IDF development environment
+cJSON library for JSON handling (for HTTP requests branch)
+Setup Instructions
+Configure Wi-Fi SSID and Password: Use idf.py menuconfig to set your Wi-Fi SSID and password.
+Configure API Endpoint: Set the API endpoint and method if needed in the respective branch.
+Build and Flash the Project:
+sh
+Copier le code
+idf.py build
+idf.py flash
+Usage
+HTTP Requests Branch
+This branch demonstrates how to:
 
-- To visualize the sensor data being sent, consider setting up a simple UDP server that logs incoming data  
+Connect to a Wi-Fi network.
+Generate random sensor values.
+Send the sensor values to a server using HTTP POST requests.
+UDP Requests Branch
+This branch demonstrates how to:
 
-- For troubleshooting and debugging, use the ESP_LOGI function to log key events and data points in the code  
-
-- This example can be extended to include more complex sensor data generation or additional types of sensors as needed  
+Connect to a Wi-Fi network.
+Generate random sensor values.
+Send the sensor values to a server using UDP.
+Additional Information
+Dependencies: Ensure all necessary dependencies are installed, such as the cJSON library for the HTTP requests branch.
+Logging: Use the ESP_LOGI function for logging key events and data points for debugging and monitoring.
+Customization: You can extend the example to include more sensors or other types of communication protocols.
